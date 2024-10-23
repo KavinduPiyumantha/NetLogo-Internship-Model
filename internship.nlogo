@@ -471,6 +471,60 @@ NIL
 NIL
 1
 
+PLOT
+894
+86
+1094
+236
+Economic Condition
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot count turtles"
+
+PLOT
+902
+313
+1102
+463
+Internships Offered
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot count turtles"
+
+PLOT
+1202
+151
+1402
+301
+Average Skill Alignment
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot count turtles"
+
 @#$#@#$#@
 ## WHAT IS IT?
 
