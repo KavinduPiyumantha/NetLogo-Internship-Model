@@ -6,12 +6,14 @@ breed [policymakers policymaker]
 
 ; Define global variables
 globals [
-  policy-active         ; Indicates if a policy is active
-  policy-strength       ; Effectiveness of the current policy
-  funding-per-student   ; Funding amount for improving university quality
-  funding-improvement   ; Percentage improvement of student skill profile
-  new-project-rate      ; Rate at which companies receive new projects
-  time-period           ; Current time period (e.g., year)
+  policy-strength             ; Effectiveness of the current policy
+  new-project-rate            ; Rate at which companies receive new projects (adjusted based on economic condition slider)
+  time-period                 ; Current time period (e.g., year)
+
+  ; funding-skill-boost         ; Percentage improvement of student skill profile due to funding (shortened variable name)
+  ; funding-per-student       ; Amount of funding for increasing government university intake (adjustable via slider)
+  ; private-intake-limit      ; Maximum intake limit for private universities (adjustable via slider)
+  ; economic-condition        ; Economic condition rate (adjustable via slider, from 1-100)
 ]
 
 ; Students' properties
@@ -43,6 +45,7 @@ universities-own [
   university-type       ; 'government' or 'private'
   curriculum-alignment  ; Curriculum alignment with industry needs (0-100)
   intake-capacity       ; Capacity of students in this university
+  funding-received      ; Funding received to increase intake capacity
 ]
 
 ; Policymakers' properties
@@ -60,9 +63,9 @@ to setup
   setup-policymaker
 
   ; Initialize global variables
-  set policy-active false
   set policy-strength 0
   set time-period 1
+  set new-project-rate economic-condition / 100  ; Set new project rate based on economic condition slider
 
   reset-ticks
 end
@@ -77,17 +80,17 @@ to setup-patches
         set pcolor brown   ; Private Universities Area
       ]
     ] [
-          ifelse (pycor > 10 and pxcor < -5) [
-      set pcolor blue  ; Light blue color for Small Companies
-    ] [
-      ifelse (pycor > 10 and pxcor > 5) [
-        set pcolor green  ; Company Area for Medium Companies
+      ifelse (pycor > 10 and pxcor < -5) [
+        set pcolor blue  ; Light blue color for Small Companies
       ] [
-        if (pycor > 10 and pxcor > -5 and pxcor < 5) [
-          set pcolor pink  ; Company Area for Large Companies
+        ifelse (pycor > 10 and pxcor > 5) [
+          set pcolor green  ; Company Area for Medium Companies
+        ] [
+          if (pycor > 10 and pxcor > -5 and pxcor < 5) [
+            set pcolor pink  ; Company Area for Large Companies
+          ]
         ]
-        ]
-    ]
+      ]
     ]
   ]
 end
@@ -102,7 +105,8 @@ to setup-universities
     set size 3
     setxy min-pxcor + 5 -12
     set curriculum-alignment 60
-    set intake-capacity 100
+    set intake-capacity 100 + funding-per-student  ; Fixed base capacity for government universities
+    set funding-received funding-per-student  ; Use the funding-per-student slider value for funding received
   ]
 
   ; Create private university area (0 < pxcor < 8)
@@ -113,7 +117,8 @@ to setup-universities
     set size 3
     setxy max-pxcor - 5 -12
     set curriculum-alignment 50
-    set intake-capacity 80
+    set intake-capacity private-intake-limit  ; Use the slider value for the intake capacity
+    set funding-received 0  ; No additional funding for private universities
   ]
 end
 
@@ -128,7 +133,7 @@ to setup-companies
     setxy -10 max-pycor - 2
     set capacity 5
     set required-skill-level 50
-    set projects-ongoing 1
+    set projects-ongoing random 3 ; Set initial ongoing projects to a random number between 0 and 2
     set internships-offered 0
     set job-openings ["QA"]
   ]
@@ -142,7 +147,7 @@ to setup-companies
     setxy 0 max-pycor - 2
     set capacity 10
     set required-skill-level 60
-    set projects-ongoing 1
+    set projects-ongoing random 4 ; Set initial ongoing projects to a random number between 0 and 3
     set internships-offered 0
     set job-openings ["SE" "QA"]
   ]
@@ -156,18 +161,28 @@ to setup-companies
     setxy 10 max-pycor - 2
     set capacity 20
     set required-skill-level 70
-    set projects-ongoing 1
+    set projects-ongoing random 5 ; Set initial ongoing projects to a random number between 0 and 4
     set internships-offered 0
     set job-openings ["SE" "QA" "DevOps"]
   ]
 end
 
-; Create students at the bottom
+; Create students at the bottom in the university areas
 to setup-students
   create-students 50 [
     set university-type one-of ["government" "private"]
     set shape "person"
-    set color green
+
+    ; Set student color and placement based on their university type
+    if university-type = "government" [
+      set color yellow - 2  ; Same color as government university building
+      setxy (random 8 - 8) (min-pycor + 2)  ; Place in the government university area within -8 to -1
+    ]
+    if university-type = "private" [
+      set color brown - 2  ; Same color as private university building
+      setxy (random 8 + 1) (min-pycor + 2)  ; Place in the private university area within 1 to 8
+    ]
+
     set size 1.5
     set gpa random-float 1.0 + 3.0
     set soft-skills random 3 + 3
@@ -178,7 +193,6 @@ to setup-students
     set skill-alignment (gpa / 4.0 * 50) + (technical-skills * 10)
     set has-internship false
     set weeks-since-rejection 0
-    setxy random-xcor (min-pycor + 2)
   ]
 end
 
@@ -219,16 +233,17 @@ end
 
 ; Update policies
 to update-policies
-  if (not policy-active) [
-    set policy-active true
-    set policy-strength 20
+  if (policy-strength > 0) [
     ask policymakers [
       set color yellow
     ]
+    ; Increase the intake capacity of government universities based on funding received
+    ask universities with [university-type = "government"] [
+      set intake-capacity intake-capacity + (funding-received / 1000)  ; Each 1000 funding allows for 1 more student
+    ]
   ]
 
-  if (policy-active and ticks mod 24 = 0) [
-    set policy-active false
+  if (ticks mod 24 = 0) [
     set policy-strength 0
     ask policymakers [
       set color gray
@@ -244,10 +259,10 @@ to update-company-capacities
     if company-size = "medium" [ set base-capacity 10 ]
     if company-size = "small" [ set base-capacity 5 ]
 
-    let economic-factor 0.8 ; Fixed economic condition
+    let economic-factor economic-condition / 100  ; Adjust capacity based on economic condition slider
     set capacity base-capacity * economic-factor
 
-    if policy-active [
+    if policy-strength > 0 [
       set capacity capacity * (1 + policy-strength / 100)
     ]
 
@@ -282,13 +297,19 @@ to update-universities
   ]
 end
 
-; Students' skill alignment updates
+; Students' skill alignment updates based on funding improvement
 to update-students-skills
   ask students [
     if not has-internship [
       let my-university one-of universities with [ university-type = [university-type] of myself ]
       if my-university != nobody [
         set skill-alignment [curriculum-alignment] of my-university
+        ; Increase soft and technical skills by the funding-skill-boost percentage if the student is from a funded university
+        if university-type = "government" and funding-skill-boost > 0 [
+          let skill_boost_factor (1 + (funding-skill-boost / 100))
+          set soft-skills min list (soft-skills * skill_boost_factor) 5
+          set technical-skills min list (technical-skills * skill_boost_factor) 5
+        ]
       ]
     ]
   ]
@@ -446,15 +467,60 @@ PENS
 "default" 1.0 0 -16777216 true "" "plot count turtles"
 
 SLIDER
-775
-29
-947
-62
+26
+125
+198
+158
 economic-condition
 economic-condition
 0
 100
-80.0
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+26
+160
+198
+193
+private-intake-limit
+private-intake-limit
+1000
+10000
+3000.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+26
+195
+198
+228
+funding-per-student
+funding-per-student
+0
+5000
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+26
+230
+199
+263
+funding-skill-boost
+funding-skill-boost
+0
+100
+0.0
 1
 1
 NIL
